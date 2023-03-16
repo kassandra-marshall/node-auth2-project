@@ -6,13 +6,15 @@ const { JWT_SECRET } = require("../secrets"); // use this secret!
 const User = require('../users/users-model')
 
 router.post("/register", validateRoleName, (req, res, next) => {
-  let user = req.body
-  const hash = bcrypt.hashSync(user.password, 8)
-  user.password = hash
-  User.add(user)
+  const { username, password } = req.body
+  const { role_name } = req
+  const hash = bcrypt.hashSync(password, 8)
+  
+  User.add({ username, password: hash, role_name})
     .then(saved => {
       res.status(201).json(saved)
     })
+    .catch(next)
 
   /**
     [POST] /api/auth/register { "username": "anna", "password": "1234", "role_name": "angel" }
@@ -29,16 +31,12 @@ router.post("/register", validateRoleName, (req, res, next) => {
 
 
 router.post("/login", checkUsernameExists, (req, res, next) => {
-  let { username, password } = req.body
-
-  User.findBy({ username })
-    .then(([user]) => {
-      if (user && bcrypt.compareSync(password, user.password)) {
-        const token = buildToken(user)
-        res.status(200).json({ message: `${user.username} is back!`, token: token})
-      } 
-    })
-    .catch(next)
+  if (bcrypt.compareSync(req.body.password, req.user.password)) {
+    const token = buildToken(req.user)
+    res.status(200).json({ message: `${req.user.username} is back!`, token: token})
+  } else {
+    next({ status: 401, message: 'Invalid credentials' })
+  }
   /**
     [POST] /api/auth/login { "username": "sue", "password": "1234" }
 
@@ -62,7 +60,7 @@ router.post("/login", checkUsernameExists, (req, res, next) => {
 
 function buildToken(user) {
   const payload = {
-    subject: user.id,
+    subject: user.user_id,
     username: user.username,
     role_name: user.role_name
   }
